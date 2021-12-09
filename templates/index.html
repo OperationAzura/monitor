@@ -9,10 +9,14 @@
 <body>
     <button> start</button>
     <img src="{{ url_for('video') }}" width="100%">
+
+<!-- comment out audio since having issues in server
+
     <audio id="myaudio" autoplay >
         <source src="{{ url_for('audio') }}" type="audio/x-wav;codec=pcm">
         Your browser does not support the audio element.
     </audio>
+-->
     <script>
 
     var context;
