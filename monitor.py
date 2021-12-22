@@ -7,7 +7,7 @@ import pyaudio
 print('yep')
 child = pexpect.spawn('sudo service nvargus-daemon restart')
 child.expect('password')
-child.sendline('bazinga1')
+child.sendline('your sudo password')
 time.sleep(1)
 print('balls')
 # Image frame sent to the Flask object
@@ -31,7 +31,7 @@ app = Flask(__name__, template_folder='templates')
 @app.route('/')
 def index():
     """Video streaming home page."""
-    return render_template('mx.html')
+    return render_template('index.html')
 
 @app.route('/status')
 def getStatus():

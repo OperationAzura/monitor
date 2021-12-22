@@ -9,18 +9,47 @@
 <body>
     <button> start</button>
     <img src="{{ url_for('video') }}" width="100%">
-
+    <br>
+    <center>
+    <h1>
+    <div id="status"></div>
+    </h1>
+    </center>
 <!-- comment out audio since having issues in server
 
     <audio id="myaudio" autoplay >
-        <source src="{{ url_for('audio') }}" type="audio/x-wav;codec=pcm">
+        <source src="" type="audio/x-wav;codec=pcm">
         Your browser does not support the audio element.
     </audio>
 -->
     <script>
-
+function getData(call, data){
+    var ajaxReq = new XMLHttpRequest();
+    ajaxReq.onreadystatechange = function() {
+        if (ajaxReq.readyState == XMLHttpRequest.DONE) {
+            if (ajaxReq.status == 200) {
+                console.log(ajaxReq.responseText);
+                document.getElementById("status").innerHTML = ajaxReq.responseText;
+            }
+            else if (ajaxReq.status == 400){
+                console.log("error 400");
+            }
+            else {
+                console.log("unknown error");
+            }
+        }
+    };
+    ajaxReq.open("GET", "http://192.168.1.38:8000/"+call+data+"", true);
+    ajaxReq.setRequestHeader('Access-Control-Allow-Headers', '*');
+    ajaxReq.send();
+}
+    
     var context;
     window.onload = function() {
+     setInterval(function(){
+       getData("status","");
+     }, 10000);
+
      context = new AudioContext();
       context.onstatechange = function() {
         //if you have permissions, the audioContext will transition to 'running' immediately
