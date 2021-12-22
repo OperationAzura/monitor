@@ -1,9 +1,15 @@
 import cv2
+import pexpect
 import time
 import threading
 from flask import Flask, Response,render_template
 import pyaudio
-
+print('yep')
+child = pexpect.spawn('sudo service nvargus-daemon restart')
+child.expect('password')
+child.sendline('bazinga1')
+time.sleep(1)
+print('balls')
 # Image frame sent to the Flask object
 global video_frame
 video_frame = None
@@ -12,82 +18,64 @@ video_frame = None
 global thread_lock 
 thread_lock = threading.Lock()
 
+global statusLock
+statusLock = threading.Lock()
+global status
+status = 'None'
 # GStreamer Pipeline to access the Raspberry Pi camera
-GSTREAMER_PIPELINE = 'nvarguscamerasrc ! video/x-raw(memory:NVMM), width=3280, height=2464, format=(string)NV12, framerate=21/1 ! nvvidconv flip-method=2 ! video/x-raw, width=960, height=616, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink wait-on-eos=false max-buffers=1 drop=True'
+GSTREAMER_PIPELINE = 'nvarguscamerasrc ! video/x-raw(memory:NVMM), width=1280, height=720, format=(string)NV12, framerate=60/1 ! nvvidconv flip-method=2 ! video/x-raw, width=640, height=360, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink wait-on-eos=false max-buffers=1 drop=True'
 
 # Create the Flask object for the application
 app = Flask(__name__, template_folder='templates')
 
-devIndex = 11
-
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 48000
-CHUNK = 1024
-RECORD_SECONDS = 2
-
-audio1 = pyaudio.PyAudio()
-
-def genHeader(sampleRate, bitsPerSample, channels):
-    datasize = 2000*10**6
-    o = bytes("RIFF",'ascii')                                               # (4byte) Marks file as RIFF
-    o += (datasize + 36).to_bytes(4,'little')                               # (4byte) File size in bytes excluding this and RIFF marker
-    o += bytes("WAVE",'ascii')                                              # (4byte) File type
-    o += bytes("fmt ",'ascii')                                              # (4byte) Format Chunk Marker
-    o += (16).to_bytes(4,'little')                                          # (4byte) Length of above format data
-    o += (1).to_bytes(2,'little')                                           # (2byte) Format type (1 - PCM)
-    o += (channels).to_bytes(2,'little')                                    # (2byte)
-    o += (sampleRate).to_bytes(4,'little')                                  # (4byte)
-    o += (sampleRate * channels * bitsPerSample // 8).to_bytes(4,'little')  # (4byte)
-    o += (channels * bitsPerSample // 8).to_bytes(2,'little')               # (2byte)
-    o += (bitsPerSample).to_bytes(2,'little')                               # (2byte)
-    o += bytes("data",'ascii')                                              # (4byte) Data Chunk Marker
-    o += (datasize).to_bytes(4,'little')                                    # (4byte) Data size in bytes
-    return o
-
-@app.route('/audio')
-def audio():
-    # start Recording
-    def sound():
-
-        CHUNK = 1024
-        sampleRate = 48000
-        bitsPerSample = 16
-        channels = 1
-        wav_header = genHeader(sampleRate, bitsPerSample, channels)
-
-        stream = audio1.open(format=FORMAT, channels=CHANNELS,
-                        rate=RATE, input=True,input_device_index=devIndex,
-                        frames_per_buffer=CHUNK)
-        print("recording...")
-        #frames = []
-        first_run = True
-        while True:
-           if first_run:
-               data = wav_header + stream.read(CHUNK)
-               first_run = False
-           else:
-               data = stream.read(CHUNK, exception_on_overflow = False)
-           yield(data)
-
-    return Response(sound())
-
 @app.route('/')
 def index():
     """Video streaming home page."""
-    return render_template('index.html')
+    return render_template('mx.html')
 
-
-
+@app.route('/status')
+def getStatus():
+    global statusLock
+    with statusLock:
+        global status
+        return status
 def captureFrames():
     global video_frame, thread_lock
-
+    frameCountTick = 5
+    frameCount = frameCountTick + 1
     # Video capturing from OpenCV
-    video_capture = cv2.VideoCapture(GSTREAMER_PIPELINE, cv2.CAP_GSTREAMER)
+    cap = cv2.VideoCapture(GSTREAMER_PIPELINE, cv2.CAP_GSTREAMER)
+    #frames for motion detection
+    while not cap.isOpened():
+        pass
+    firstFrame = None
+    firstGray = None
+    while True:
+        retKey, frame = cap.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-    while True and video_capture.isOpened():
-        return_key, frame = video_capture.read()
-        if not return_key:
+        if frameCount > frameCountTick:
+            firstGray = gray
+            frameCount = 0
+            continue
+        else:
+            frameCount += 1
+
+        deltaFrame = cv2.absdiff(firstGray, gray)
+        thresh = cv2.threshold(deltaFrame, 25, 255, cv2.THRESH_BINARY)[1]
+        thresh = cv2.dilate(thresh, None, iterations=2)
+        cnts, h = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        totalArea = 0
+        for c in cnts:
+            totalArea += cv2.contourArea(c)
+        cv2.drawContours(frame, cnts, -1, (0, 255, 0), 3)
+        global statusLock
+        with statusLock:
+            global status
+            status =  str(totalArea)
+
+        if not retKey:
             break
 
         # Create a copy of the frame and store it in the global variable,
@@ -99,7 +87,7 @@ def captureFrames():
         if key == 27:
             break
 
-    video_capture.release()
+    cap.release()
         
 def encodeFrame():
     global thread_lock
@@ -109,8 +97,8 @@ def encodeFrame():
             global video_frame
             if video_frame is None:
                 continue
-            return_key, encoded_image = cv2.imencode(".jpg", video_frame)
-            if not return_key:
+            retKey, encoded_image = cv2.imencode(".jpg", video_frame)
+            if not retKey:
                 continue
 
         # Output image as a byte array
