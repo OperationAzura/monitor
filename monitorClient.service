@@ -2,13 +2,11 @@
 Description=Baby Monitor Client
 
 [Service]
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
-ExecStart=/usr/bin/chromium-browser --disable-gpu --disable-software-rasterizer kiosk  http://192.168.1.38:8000
+ExecStart=/usr/bin/python3 /home/pi/projects/monitor/mClient.py
 Restart=always
 RestartSec=10s
 KillMode=process
 TimeoutSec=infinity
 
 [Install]
-WantedBy=graphical.target
+WantedBy=default.target
