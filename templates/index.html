@@ -48,7 +48,8 @@ function getData(call, data){
     window.onload = function() {
      setInterval(function(){
        getData("status","");
-     }, 10000);
+     }, 500);
+     getData("status","");
 
      context = new AudioContext();
       context.onstatechange = function() {

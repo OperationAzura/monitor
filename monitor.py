@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import pexpect
 import time
 import threading
@@ -28,6 +29,32 @@ GSTREAMER_PIPELINE = 'nvarguscamerasrc ! video/x-raw(memory:NVMM), width=1280, h
 # Create the Flask object for the application
 app = Flask(__name__, template_folder='templates')
 
+def unsharpMask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask."""
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened
+
+def strokeEdges(src, dst, blurKsize = 7, edgeKsize = 5):
+   if blurKsize >= 3:
+       blurredSrc = cv2.medianBlur(src, blurKsize)
+       graySrc = cv2.cvtColor(blurredSrc, cv2.COLOR_BGR2GRAY)
+   else:
+       graySrc = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+   cv2.Laplacian(graySrc, cv2.CV_8U, graySrc, ksize = edgeKsize)
+   normalizedInverseAlpha = (1.0 / 255) * (255 - graySrc)
+   channels = cv2.split(src)
+   for channel in channels:
+       channel[:] = channel * normalizedInverseAlpha
+   cv2.merge(channels, dst)
+   return dst
+
 @app.route('/')
 def index():
     """Video streaming home page."""
@@ -50,8 +77,16 @@ def captureFrames():
         pass
     firstFrame = None
     firstGray = None
+    sharpCount = 0
+    sharpCountTick = 300
+    sharp = False
+    sharpx = False
+    framex = None
     while True:
-        retKey, frame = cap.read()
+        retKey, framex = cap.read()
+        frame = framex.copy()
+        frame = strokeEdges(framex, frame, blurKsize = 7, edgeKsize = 5)
+        #frame = unsharpMask(frame)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
@@ -73,7 +108,7 @@ def captureFrames():
         global statusLock
         with statusLock:
             global status
-            status =  str(totalArea)
+            status = str(totalArea)
 
         if not retKey:
             break
