@@ -5,24 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Document</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
-    <button> start</button>
     <img src="{{ url_for('video') }}" width="100%">
+    <video id="video" autoplay preload="none"></video>
     <br>
     <center>
-    <h1>
-    <div id="status"></div>
+    <form action="http://192.168.1.38:5000/say" method="get">
+        <center>
+        <label for="input">Say what?:</label> </center>
+        <input type="text" id="input" name="text"> <center>
+        </center>
+        <button type="submit">Say</button> <h1>
+    </form>    <div id="status"></div>
     </h1>
+    <button onclick="rebootSystem()"> reboot system</button>
+    <button onclick="restartApp()"> restart app</button>
     </center>
-<!-- comment out audio since having issues in server
 
-    <audio id="myaudio" autoplay >
-        <source src="" type="audio/x-wav;codec=pcm">
-        Your browser does not support the audio element.
-    </audio>
--->
     <script>
+      //audio stream code
+      if (Hls.isSupported()) {
+        var video = document.getElementById('video');
+        var hls = new Hls();
+        hls.loadSource('http://192.168.1.38:8000/stream/stream.m3u8');
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+          video.play();
+        });
+      }
+      else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = 'http://192.168.1.38:8000/stream.m3u8';
+        video.addEventListener('loadedmetadata', function() {
+          video.play();
+        });
+      }
+      //end audio stream
+
+//code for video and numbers
+function restartApp() {
+    getData("restartserver","")
+}
+
+function rebootSystem() {
+    getData("rebootsystem","");    
+}
+
 function getData(call, data){
     var ajaxReq = new XMLHttpRequest();
     ajaxReq.onreadystatechange = function() {
